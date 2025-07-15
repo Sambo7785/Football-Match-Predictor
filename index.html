@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Football Match Predictor</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background-color: #f2f2f2;
+    }
+    h2 {
+      color: #222;
+    }
+    input {
+      padding: 10px;
+      font-size: 1em;
+      width: 300px;
+    }
+    button {
+      padding: 10px 15px;
+      font-size: 1em;
+    }
+    #output {
+      margin-top: 30px;
+      background-color: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    table, th, td {
+      border: 1px solid #ccc;
+    }
+    th, td {
+      padding: 10px;
+      text-align: center;
+    }
+    .risk {
+      color: red;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h2>Football Match Predictor (Stat-Only, No Odds)</h2>
+  <p>Enter fixture like: <strong>AC Milan vs Inter</strong></p>
+  <input id="fixtureInput" type="text" placeholder="Team A vs Team B" />
+  <button onclick="predictFixture()">Predict</button>
+
+  <div id="output"></div>
+
+  <script>
+    async function predictFixture() {
+      const fixtureInput = document.getElementById("fixtureInput").value.trim();
+      const output = document.getElementById("output");
+      output.innerHTML = "Loading...";
+
+      const [homeTeam, awayTeam] = fixtureInput.split(" vs ").map(x => x.trim());
+      if (!homeTeam || !awayTeam) {
+        output.innerHTML = "<p>Please enter a valid fixture like: AC Milan vs Inter</p>";
+        return;
+      }
+
+      const API_KEY = "YOUR_API_KEY_HERE"; // 🔑 Replace with your real API key from api-football.com
+      const BASE_URL = "https://v3.football.api-sports.io";
+
+      const headers = {
+        "x-apisports-key": API_KEY
+      };
+
+      try {
+        const teamRes = await fetch(`${BASE_URL}/teams?search=${homeTeam}`, { headers });
+        const teamData = await teamRes.json();
+        const homeTeamId = teamData.response[0]?.team?.id;
+
+        const awayRes = await fetch(`${BASE_URL}/teams?search=${awayTeam}`, { headers });
+        const awayData = await awayRes.json();
+        const awayTeamId = awayData.response[0]?.team?.id;
+
+        const season = 2024;
+        const leagueId = 39; // Example: Premier League (change for other leagues)
+
+        const homeStatsRes = await fetch(`${BASE_URL}/teams/statistics?team=${homeTeamId}&season=${season}&league=${leagueId}`, { headers });
+        const awayStatsRes = await fetch(`${BASE_URL}/teams/statistics?team=${awayTeamId}&season=${season}&league=${leagueId}`, { headers });
+
+        const home = await homeStatsRes.json();
+        const away = await awayStatsRes.json();
+
+        const leagueAvg = home.response?.goals?.for?.average?.total || 2.5;
+
+        const avgGoalsHome = parseFloat(home.response.goals.for.average.home);
+        const avgGoalsAway = parseFloat(away.response.goals.for.average.away);
+        const avgConcedeHome = parseFloat(home.response.goals.against.average.home);
+        const avgConcedeAway = parseFloat(away.response.goals.against.average.away);
+
+        const homeGG = home.response.btts?.total || 50;
+        const awayGG = away.response.btts?.total || 50;
+
+        const over25Prob = ((avgGoalsHome + avgGoalsAway) / (leagueAvg * 2)) * 100;
+        const under25Prob = 100 - over25Prob;
+        const ggProb = (homeGG + awayGG) / 2;
+        const ngProb = 100 - ggProb;
+
+        const combo = {
+          "Over 2.5 + GG": (over25Prob * ggProb) / 100,
+          "Over 2.5 + NG": (over25Prob * ngProb) / 100,
+          "Under 2.5 + GG": (under25Prob * ggProb) / 100,
+          "Under 2.5 + NG": (under25Prob * ngProb) / 100
+        };
+
+        const isDrawRisk = combo["Under 2.5 + GG"] > 30;
+
+        output.innerHTML = `
+          <h3>${homeTeam} vs ${awayTeam}</h3>
+          <table>
+            <tr><th>Market</th><th>Implied Probability (%)</th></tr>
+            <tr><td>Over 2.5</td><td>${over25Prob.toFixed(2)}%</td></tr>
+            <tr><td>Under 2.5</td><td>${under25Prob.toFixed(2)}%</td></tr>
+            <tr><td>BTTS (GG)</td><td>${ggProb.toFixed(2)}%</td></tr>
+            <tr><td>BTTS (No)</td><td>${ngProb.toFixed(2)}%</td></tr>
+            <tr><td>Over 2.5 + GG</td><td>${combo["Over 2.5 + GG"].toFixed(2)}%</td></tr>
+            <tr><td>Over 2.5 + NG</td><td>${combo["Over 2.5 + NG"].toFixed(2)}%</td></tr>
+            <tr><td>Under 2.5 + GG</td><td>${combo["Under 2.5 + GG"].toFixed(2)}%</td></tr>
+            <tr><td>Under 2.5 + NG</td><td>${combo["Under 2.5 + NG"].toFixed(2)}%</td></tr>
+          </table>
+          ${isDrawRisk ? `<p class='risk'>⚠️ 1-1 Draw Risk: High (U2.5 + GG over 30%)</p>` : ""}
+        `;
+      } catch (err) {
+        console.error(err);
+        output.innerHTML = "<p>Error fetching prediction. Please check the team names or API key.</p>";
+      }
+    }
+  </script>
+</body>
+</html>
