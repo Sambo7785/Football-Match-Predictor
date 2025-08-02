@@ -1,148 +1,76 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Football Match Predictor (No Odds)</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      padding: 20px;
-      background-color: #f2f2f2;
-    }
-    h2 {
-      color: #222;
-    }
-    input {
-      padding: 10px;
-      font-size: 1em;
-      width: 300px;
-    }
-    button {
-      padding: 10px 15px;
-      font-size: 1em;
-    }
-    #output {
-      margin-top: 30px;
-      background-color: #fff;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 20px;
-    }
-    table, th, td {
-      border: 1px solid #ccc;
-    }
-    th, td {
-      padding: 10px;
-      text-align: center;
-    }
-    .risk {
-      color: red;
-      font-weight: bold;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <title>Auto Windrawwin Match Search</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+        }
+        label, input, button {
+            font-size: 1.2em;
+        }
+        #result {
+            margin-top: 20px;
+        }
+        input[type="text"] {
+            width: 300px;
+            padding: 6px;
+        }
+        button {
+            padding: 8px 16px;
+        }
+        a {
+            color: #1565c0;
+            text-decoration: none;
+            font-weight: bold;
+        }
+    </style>
 </head>
 <body>
-  <h2>Football Match Predictor (Stat Only, No Odds)</h2>
-  <p>Enter a fixture like: <strong>Chelsea vs PSG</strong></p>
-  <input id="fixtureInput" type="text" placeholder="Team A vs Team B" />
-  <button onclick="predictFixture()">Predict</button>
+    <h1>Auto Search for Windrawwin Match Reviews</h1>
+    <label for="teams">Enter Fixture (e.g., Arsenal vs Chelsea):</label><br>
+    <input type="text" id="teams" placeholder="Home Team vs Away Team">
+    <button onclick="searchMatch()">Search</button>
+    <div id="result"></div>
 
-  <div id="output"></div>
-
-  <script>
-    async function predictFixture() {
-      const fixtureInput = document.getElementById("fixtureInput").value.trim();
-      const output = document.getElementById("output");
-      output.innerHTML = "Loading...";
-
-      const [homeTeam, awayTeam] = fixtureInput.split(" vs ").map(x => x.trim());
-      if (!homeTeam || !awayTeam) {
-        output.innerHTML = "<p>Please enter a valid fixture like: Chelsea vs PSG</p>";
-        return;
-      }
-
-      const API_KEY = "const API_KEY = "0684e4bc0fa422f4f17a4fd129af68094259fc48edbfafb999239ccc1816cb5c";
-";
-      const BASE_URL = "https://api-football-v1.p.rapidapi.com/v3";
-
-      const headers = {
-        "X-RapidAPI-Key": API_KEY,
-        "X-RapidAPI-Host": "api-football-v1.p.rapidapi.com"
-      };
-
-      try {
-        const teamRes1 = await fetch(`${BASE_URL}/teams?search=${homeTeam}`, { headers });
-        const teamData1 = await teamRes1.json();
-        const homeTeamId = teamData1.response[0]?.team?.id;
-
-        const teamRes2 = await fetch(`${BASE_URL}/teams?search=${awayTeam}`, { headers });
-        const teamData2 = await teamRes2.json();
-        const awayTeamId = teamData2.response[0]?.team?.id;
-
-        if (!homeTeamId || !awayTeamId) {
-          output.innerHTML = "<p>Team not found. Please check your team names.</p>";
-          return;
+    <script>
+        function slugify(text) {
+            // Lowercase, remove diacritics, trim, replace non-word with hyphens, remove extra hyphens
+            return text
+                .toLowerCase()
+                .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+                .replace(/[^a-z0-9]+/g, "-")
+                .replace(/^-+|-+$/g, "");
         }
 
-        const season = 2024;
-        const leagueId = 39; // Default to Premier League (can be dynamic later)
+        function searchMatch() {
+            const input = document.getElementById('teams').value.trim();
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '';
 
-        const homeStatsRes = await fetch(`${BASE_URL}/teams/statistics?team=${homeTeamId}&season=${season}&league=${leagueId}`, { headers });
-        const awayStatsRes = await fetch(`${BASE_URL}/teams/statistics?team=${awayTeamId}&season=${season}&league=${leagueId}`, { headers });
+            if (!input.includes('vs')) {
+                resultDiv.innerHTML = '<span style="color:red;">Please enter fixture as "Home Team vs Away Team".</span>';
+                return;
+            }
 
-        const home = await homeStatsRes.json();
-        const away = await awayStatsRes.json();
+            const [home, away] = input.split('vs').map(str => str.trim());
+            if (!home || !away) {
+                resultDiv.innerHTML = '<span style="color:red;">Both team names are required.</span>';
+                return;
+            }
 
-        const leagueAvg = home.response?.goals?.for?.average?.total || 2.5;
+            // Windrawwin's URL format: https://www.windrawwin.com/results/{home-team}-vs-{away-team}/
+            const homeSlug = slugify(home);
+            const awaySlug = slugify(away);
+            const url = `https://www.windrawwin.com/results/${homeSlug}-vs-${awaySlug}/`;
 
-        const avgGoalsHome = parseFloat(home.response.goals.for.average.home);
-        const avgGoalsAway = parseFloat(away.response.goals.for.average.away);
-        const avgConcedeHome = parseFloat(home.response.goals.against.average.home);
-        const avgConcedeAway = parseFloat(away.response.goals.against.average.away);
-
-        const homeGG = home.response.btts?.total || 50;
-        const awayGG = away.response.btts?.total || 50;
-
-        const over25Prob = ((avgGoalsHome + avgGoalsAway) / (leagueAvg * 2)) * 100;
-        const under25Prob = 100 - over25Prob;
-        const ggProb = (homeGG + awayGG) / 2;
-        const ngProb = 100 - ggProb;
-
-        const combo = {
-          "Over 2.5 + GG": (over25Prob * ggProb) / 100,
-          "Over 2.5 + NG": (over25Prob * ngProb) / 100,
-          "Under 2.5 + GG": (under25Prob * ggProb) / 100,
-          "Under 2.5 + NG": (under25Prob * ngProb) / 100
-        };
-
-        const isDrawRisk = combo["Under 2.5 + GG"] > 30;
-
-        output.innerHTML = `
-          <h3>${homeTeam} vs ${awayTeam}</h3>
-          <table>
-            <tr><th>Market</th><th>Implied Probability (%)</th></tr>
-            <tr><td>Over 2.5</td><td>${over25Prob.toFixed(2)}%</td></tr>
-            <tr><td>Under 2.5</td><td>${under25Prob.toFixed(2)}%</td></tr>
-            <tr><td>BTTS (GG)</td><td>${ggProb.toFixed(2)}%</td></tr>
-            <tr><td>BTTS (No)</td><td>${ngProb.toFixed(2)}%</td></tr>
-            <tr><td>Over 2.5 + GG</td><td>${combo["Over 2.5 + GG"].toFixed(2)}%</td></tr>
-            <tr><td>Over 2.5 + NG</td><td>${combo["Over 2.5 + NG"].toFixed(2)}%</td></tr>
-            <tr><td>Under 2.5 + GG</td><td>${combo["Under 2.5 + GG"].toFixed(2)}%</td></tr>
-            <tr><td>Under 2.5 + NG</td><td>${combo["Under 2.5 + NG"].toFixed(2)}%</td></tr>
-          </table>
-          ${isDrawRisk ? `<p class='risk'>⚠️ 1-1 Draw Risk: High (U2.5 + GG over 30%)</p>` : ""}
-        `;
-      } catch (err) {
-        console.error(err);
-        output.innerHTML = "<p>Error fetching prediction. Please check team names or API limit.</p>";
-      }
-    }
-  </script>
+            resultDiv.innerHTML = `
+                <strong>Match Review Link:</strong><br>
+                <a href="${url}" target="_blank">${url}</a>
+            `;
+        }
+    </script>
 </body>
 </html>
